@@ -1,0 +1,23 @@
+[project]
+name = "caj2pdf"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "achieve_dream", email = "wulei7217@gmail.com" }
+]
+dependencies = [
+    "pypdf>=4.3.0",
+    "imagesize>=1.4.1",
+    "pymupdf>=1.24.7",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[tool.rye]
+managed = true
+virtual = true
+dev-dependencies = []
+
+[tool.rye.scripts]
+convert = "python caj2pdf convert test/a.caj -o test/a.pdf"
+show = "python caj2pdf show test/a.caj"
