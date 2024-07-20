@@ -10,167 +10,181 @@ import re
 import struct
 import sys
 from pathlib import Path
+from shutil import copy
 from subprocess import STDOUT, CalledProcessError, check_output
 from typing import BinaryIO
 
+from pypdf import PdfWriter, PdfReader, errors
 from pypdf.generic import (
+    IndirectObject,
+    DictionaryObject,
     NameObject,
+    NumberObject,
+    TextStringObject,
     ArrayObject,
     NullObject,
 )
 
-from ..utils import CajOffset, get_num, read_int32, to_int32
+from ..utils import CajOffset, get_num, read_int32
 
 
 def caj_parser(src: Path, dest: Path, offset: CajOffset):
     with src.open("rb") as fp:
-        data = fp.read()
-    start = offset.page_num + 4
-    start = to_int32(data, start)
-    pdf_start = to_int32(data, start)
-    pdf_end = data.rfind(b"endobj") + 6
-    # pdf_end = find_all(fp, b"endobj")[-1] + 6
-    pdf_length = pdf_end - pdf_start
-    pdf_data = b"%PDF-1.3\r\n" + data[pdf_start:pdf_start+pdf_length] + b"\r\n"
-    pdf = io.BytesIO(pdf_data)
-    page_num = get_num(fp, offset.page_num)
-    end_obj_addr = find_all(pdf.read(), b"endobj")
-    obj_no = []
-    for addr in end_obj_addr:
-        startobj = fnd_rvrs(pdf, b" 0 obj", addr)
-        startobj1 = fnd_rvrs(pdf, b"\r", startobj)
-        startobj2 = fnd_rvrs(pdf, b"\n", startobj)
-        startobj = max(startobj1, startobj2)
-        length = find(pdf, b" ", startobj) - startobj
-        pdf.seek(startobj)
-        [no] = struct.unpack(str(length) + "s", pdf.read(length))
-        # no = pdf.read(length).decode()
-        if int(no) not in obj_no:
-            obj_no.append(int(no))
-            # obj_len = addr - startobj + 6
+        pdf_start = read_int32(fp, read_int32(fp,offset.page_num + 4))
+        pdf_end = find_all(fp, b"endobj")[-1] + 6
+        pdf_length = pdf_end - pdf_start
+        fp.seek(pdf_start)
+        pdf_data = b"%PDF-1.3\r\n" + fp.read(pdf_length) + b"\r\n"
+        pdf = io.BytesIO(pdf_data)
+        page_num = get_num(fp, offset.page_num)
+        toc_num = get_num(fp, offset.toc_num)
+        tocs = get_toc(fp, offset.toc_num, toc_num)
+        end_obj_addr = find_all(pdf, b"endobj")
+        obj_no = []
+        for addr in end_obj_addr:
+            startobj = fnd_rvrs(pdf, b" 0 obj", addr)
+            startobj1 = fnd_rvrs(pdf, b"\r", startobj)
+            startobj2 = fnd_rvrs(pdf, b"\n", startobj)
+            startobj = max(startobj1, startobj2)
+            length = find(pdf, b" ", startobj) - startobj
             pdf.seek(startobj)
-            # [obj] = struct.unpack(str(obj_len) + "s", pdf.read(obj_len))
-    inds_addr = [i + 8 for i in find_all(pdf, b"/Parent")]
-    inds = []
-    for addr in inds_addr:
-        length = find(pdf, b" ", addr) - addr
-        pdf.seek(addr)
-        [ind] = struct.unpack(str(length) + "s", pdf.read(length))
-        inds.append(int(ind))
-    # get pages_obj_no list containing distinct elements
-    # & find missing pages object(s) -- top pages object(s) in pages_obj_no
-    pages_obj_no = []
-    top_pages_obj_no = []
-    for ind in inds:
-        if (ind not in pages_obj_no) and (ind not in top_pages_obj_no):
-            if find(pdf, bytes("\r{0} 0 obj".format(ind), "utf-8")) == -1:
-                top_pages_obj_no.append(ind)
-            else:
-                pages_obj_no.append(ind)
-    single_pages_obj_missed = len(top_pages_obj_no) == 1
-    multi_pages_obj_missed = len(top_pages_obj_no) > 1
-    # generate catalog object
-    catalog_obj_no = fnd_unuse_no(obj_no, top_pages_obj_no)
-    obj_no.append(catalog_obj_no)
-    root_pages_obj_no = None
-    if multi_pages_obj_missed:
-        root_pages_obj_no = fnd_unuse_no(obj_no, top_pages_obj_no)
-    elif single_pages_obj_missed:
-        root_pages_obj_no = top_pages_obj_no[0]
-        top_pages_obj_no = pages_obj_no
-    else:  # root pages object exists, then find the root pages object #
-        found = False
-        for pon in pages_obj_no:
-            tmp_addr = find(pdf, bytes("\r{0} 0 obj".format(pon), "utf-8"))
-            while True:
-                pdf.seek(tmp_addr)
-                [_str] = struct.unpack("6s", pdf.read(6))
-                if _str == b"Parent":
+            [no] = struct.unpack(str(length) + "s", pdf.read(length))
+            # no = pdf.read(length).decode()
+            if int(no) not in obj_no:
+                obj_no.append(int(no))
+                # obj_len = addr - startobj + 6
+                pdf.seek(startobj)
+                # [obj] = struct.unpack(str(obj_len) + "s", pdf.read(obj_len))
+        inds_addr = [i + 8 for i in find_all(pdf, b"/Parent")]
+        inds = []
+        for addr in inds_addr:
+            length = find(pdf, b" ", addr) - addr
+            pdf.seek(addr)
+            [ind] = struct.unpack(str(length) + "s", pdf.read(length))
+            inds.append(int(ind))
+        # get pages_obj_no list containing distinct elements
+        # & find missing pages object(s) -- top pages object(s) in pages_obj_no
+        pages_obj_no = []
+        top_pages_obj_no = []
+        for ind in inds:
+            if (ind not in pages_obj_no) and (ind not in top_pages_obj_no):
+                if find(pdf, bytes("\r{0} 0 obj".format(ind), "utf-8")) == -1:
+                    top_pages_obj_no.append(ind)
+                else:
+                    pages_obj_no.append(ind)
+        single_pages_obj_missed = len(top_pages_obj_no) == 1
+        multi_pages_obj_missed = len(top_pages_obj_no) > 1
+        # generate catalog object
+        catalog_obj_no = fnd_unuse_no(obj_no, top_pages_obj_no)
+        obj_no.append(catalog_obj_no)
+        root_pages_obj_no = None
+        if multi_pages_obj_missed:
+            root_pages_obj_no = fnd_unuse_no(obj_no, top_pages_obj_no)
+        elif single_pages_obj_missed:
+            root_pages_obj_no = top_pages_obj_no[0]
+            top_pages_obj_no = pages_obj_no
+        else:  # root pages object exists, then find the root pages object #
+            found = False
+            for pon in pages_obj_no:
+                tmp_addr = find(pdf, bytes("\r{0} 0 obj".format(pon), "utf-8"))
+                while True:
+                    pdf.seek(tmp_addr)
+                    [_str] = struct.unpack("6s", pdf.read(6))
+                    if _str == b"Parent":
+                        break
+                    elif _str == b"endobj":
+                        root_pages_obj_no = pon
+                        found = True
+                        break
+                    tmp_addr = tmp_addr + 1
+                if found:
                     break
-                elif _str == b"endobj":
-                    root_pages_obj_no = pon
-                    found = True
-                    break
-                tmp_addr = tmp_addr + 1
-            if found:
-                break
-    catalog = bytes(
-        "{0} 0 obj\r<</Type /Catalog\r/Pages {1} 0 R\r>>\rendobj\r".format(
-            catalog_obj_no, root_pages_obj_no
-        ),
-        "utf-8",
-    )
-    pdf_data += catalog
-    pdf.close()
-    with open("pdf.tmp", "wb") as f:
-        f.write(pdf_data)
-    pdf = open("pdf.tmp", "rb")
-
-    # Add Pages obj and EOF mark
-    # if root pages object exist, pass
-    # deal with single missing pages object
-    if single_pages_obj_missed or multi_pages_obj_missed:
-        inds_str = ["{0} 0 R".format(i) for i in top_pages_obj_no]
-        kids_str = "[{0}]".format(" ".join(inds_str))
-        pages_str = "{0} 0 obj\r<<\r/Type /Pages\r/Kids {1}\r/Count {2}\r>>\rendobj\r".format(
-            root_pages_obj_no, kids_str, page_num
+        catalog = bytes(
+            "{0} 0 obj\r<</Type /Catalog\r/Pages {1} 0 R\r>>\rendobj\r".format(
+                catalog_obj_no, root_pages_obj_no
+            ),
+            "utf-8",
         )
-        pdf_data += bytes(pages_str, "utf-8")
+        pdf_data += catalog
         pdf.close()
         with open("pdf.tmp", "wb") as f:
             f.write(pdf_data)
         pdf = open("pdf.tmp", "rb")
-    # deal with multiple missing pages objects
-    if multi_pages_obj_missed:
-        kids_dict = {i: [] for i in top_pages_obj_no}
-        count_dict = {i: 0 for i in top_pages_obj_no}
-        for tpon in top_pages_obj_no:
-            kids_addr = find_all(pdf, bytes("/Parent {0} 0 R".format(tpon), "utf-8"))
-            for kid in kids_addr:
-                ind = fnd_rvrs(pdf, b"obj", kid) - 4
-                addr = fnd_rvrs(pdf, b"\r", ind)
-                length = find(pdf, b" ", addr) - addr
-                pdf.seek(addr)
-                [ind] = struct.unpack(str(length) + "s", pdf.read(length))
-                kids_dict[tpon].append(int(ind))
-                type_addr = find(pdf, b"/Type", addr) + 5
-                tmp_addr = find(pdf, b"/", type_addr) + 1
-                pdf.seek(tmp_addr)
-                [_type] = struct.unpack("5s", pdf.read(5))
-                if _type == b"Pages":
-                    cnt_addr = find(pdf, b"/Count ", addr) + 7
-                    pdf.seek(cnt_addr)
-                    [_str] = struct.unpack("1s", pdf.read(1))
-                    cnt_len = 0
-                    while _str not in [b" ", b"\r", b"/"]:
-                        cnt_len += 1
-                        pdf.seek(cnt_addr + cnt_len)
-                        [_str] = struct.unpack("1s", pdf.read(1))
-                    pdf.seek(cnt_addr)
-                    [cnt] = struct.unpack(str(cnt_len) + "s", pdf.read(cnt_len))
-                    count_dict[tpon] += int(cnt)
-                else:  # _type == b"Page"
-                    count_dict[tpon] += 1
-            kids_no_str = ["{0} 0 R".format(i) for i in kids_dict[tpon]]
-            kids_str = "[{0}]".format(" ".join(kids_no_str))
+
+        # Add Pages obj and EOF mark
+        # if root pages object exist, pass
+        # deal with single missing pages object
+        if single_pages_obj_missed or multi_pages_obj_missed:
+            inds_str = ["{0} 0 R".format(i) for i in top_pages_obj_no]
+            kids_str = "[{0}]".format(" ".join(inds_str))
             pages_str = "{0} 0 obj\r<<\r/Type /Pages\r/Kids {1}\r/Count {2}\r>>\rendobj\r".format(
-                tpon, kids_str, count_dict[tpon]
+                root_pages_obj_no, kids_str, page_num
             )
             pdf_data += bytes(pages_str, "utf-8")
-    pdf_data += bytes("\n%%EOF\r", "utf-8")
-    pdf.close()
-    with open("pdf.tmp", "wb") as f:
-        f.write(pdf_data)
+            pdf.close()
+            with open("pdf.tmp", "wb") as f:
+                f.write(pdf_data)
+            pdf = open("pdf.tmp", "rb")
+        # deal with multiple missing pages objects
+        if multi_pages_obj_missed:
+            kids_dict = {i: [] for i in top_pages_obj_no}
+            count_dict = {i: 0 for i in top_pages_obj_no}
+            for tpon in top_pages_obj_no:
+                kids_addr = find_all(pdf, bytes("/Parent {0} 0 R".format(tpon), "utf-8"))
+                for kid in kids_addr:
+                    ind = fnd_rvrs(pdf, b"obj", kid) - 4
+                    addr = fnd_rvrs(pdf, b"\r", ind)
+                    length = find(pdf, b" ", addr) - addr
+                    pdf.seek(addr)
+                    [ind] = struct.unpack(str(length) + "s", pdf.read(length))
+                    kids_dict[tpon].append(int(ind))
+                    type_addr = find(pdf, b"/Type", addr) + 5
+                    tmp_addr = find(pdf, b"/", type_addr) + 1
+                    pdf.seek(tmp_addr)
+                    [_type] = struct.unpack("5s", pdf.read(5))
+                    if _type == b"Pages":
+                        cnt_addr = find(pdf, b"/Count ", addr) + 7
+                        pdf.seek(cnt_addr)
+                        [_str] = struct.unpack("1s", pdf.read(1))
+                        cnt_len = 0
+                        while _str not in [b" ", b"\r", b"/"]:
+                            cnt_len += 1
+                            pdf.seek(cnt_addr + cnt_len)
+                            [_str] = struct.unpack("1s", pdf.read(1))
+                        pdf.seek(cnt_addr)
+                        [cnt] = struct.unpack(str(cnt_len) + "s", pdf.read(cnt_len))
+                        count_dict[tpon] += int(cnt)
+                    else:  # _type == b"Page"
+                        count_dict[tpon] += 1
+                kids_no_str = ["{0} 0 R".format(i) for i in kids_dict[tpon]]
+                kids_str = "[{0}]".format(" ".join(kids_no_str))
+                pages_str = "{0} 0 obj\r<<\r/Type /Pages\r/Kids {1}\r/Count {2}\r>>\rendobj\r".format(
+                    tpon, kids_str, count_dict[tpon]
+                )
+                pdf_data += bytes(pages_str, "utf-8")
+        pdf_data += bytes("\n%%EOF\r", "utf-8")
+        pdf.close()
+        with open("pdf.tmp", "wb") as f:
+            f.write(pdf_data)
 
-    # Use mutool to repair xref
-    try:
-        check_output(["pymupdf", "clean", "pdf.tmp", "pdf_toc.pdf"], stderr=STDOUT)
-    except CalledProcessError as e:
-        print(e.output.decode("utf-8"))
-        raise SystemExit(
-            "Command mutool returned non-zero exit status " + str(e.returncode)
-        )
-    os.remove("pdf.tmp")
+        # Use mutool to repair xref
+        try:
+            check_output(["pymupdf", "clean", "pdf.tmp", "pdf_toc.pdf"], stderr=STDOUT)
+        except CalledProcessError as e:
+            print(e.output.decode("utf-8"))
+            raise SystemExit(
+                "Command mutool returned non-zero exit status " + str(e.returncode)
+            )
+
+        # Add Outlines
+        try:
+            add_outlines(tocs, "pdf_toc.pdf", dest)
+        except errors.PdfReadError as e:
+            print("errors.PdfReadError:", str(e))
+            copy("pdf_toc.pdf", dest)
+            pass
+        os.remove("pdf.tmp")
+        os.remove("pdf_toc.pdf")
 
 
 def get_toc(fp: BinaryIO, toc_num_offset: int, toc_num: int):
@@ -275,6 +289,71 @@ def build_outlines_btree(toc):
         t["node"] = node
 
 
+def add_outlines(toc, filename, output):
+    build_outlines_btree(toc)
+    pdf_out = PdfWriter()
+    inputFile = open(filename, "rb")
+    pdf_in = PdfReader(inputFile)
+    for p in pdf_in.pages:
+        try:
+            pdf_out.add_page(p)
+        except AttributeError:
+            pdf_out.add_page(p)
+    toc_num = len(toc)
+    if toc_num == 0:  # Just copy if toc empty
+        outputFile = open(output, "wb")
+        pdf_out.write(outputFile)
+        inputFile.close()
+        outputFile.close()
+        return
+    idoix = len(pdf_out._objects) + 1
+    idorefs = [IndirectObject(x + idoix, 0, pdf_out) for x in range(toc_num + 1)]
+    ol = DictionaryObject()
+    ol.update(
+        {
+            NameObject("/Type"): NameObject("/Outlines"),
+            NameObject("/First"): idorefs[1],
+            NameObject("/Last"): idorefs[-1],
+            NameObject("/Count"): NumberObject(toc_num),
+        }
+    )
+    olitems = []
+    for t in toc:
+        oli = DictionaryObject()
+        oli.update(
+            {
+                NameObject("/Title"): TextStringObject(t["title"].decode("utf-8")),
+                NameObject("/Dest"): make_dest(pdf_out, t["page"]),
+            }
+        )
+        opt_keys = {
+            "real_parent": "/Parent",
+            "prev": "/Prev",
+            "next": "/Next",
+            "first": "/First",
+            "last": "/Last",
+        }
+        for k, v in opt_keys.items():
+            n = getattr(t["node"], k)()
+            if n is not None:
+                oli.update({NameObject(v): idorefs[n.index]})
+        olitems.append(oli)
+    try:
+        pdf_out._add_object(ol)
+    except AttributeError:
+        pdf_out._addObject(ol)
+    for i in olitems:
+        try:
+            pdf_out._add_object(i)
+        except AttributeError:
+            pdf_out._addObject(i)
+    pdf_out._root_object.update({NameObject("/Outlines"): idorefs[0]})
+    outputFile = open(output, "wb")
+    pdf_out.write(outputFile)
+    inputFile.close()
+    outputFile.close()
+
+
 def make_dest(pdfw, pg):
     d = ArrayObject()
     try:
@@ -317,14 +396,10 @@ def find(fp: BinaryIO, s: bytes, start: int = 0):
             return -1
 
 
-def find_all(data: bytes, search_bytes: bytes) -> list:
-    """
-    从data中找出所有的search_bytes开始位置
-    :param data: 二进制数据
-    :param search_bytes: 搜索的字节串
-    :return: 所有的匹配的位置
-    """
-    pattern = re.compile(search_bytes)
+def find_all(fp: BinaryIO, s: bytes):
+    fp.seek(0)
+    data = fp.read()
+    pattern = re.compile(s)
     return [matched.start() for matched in pattern.finditer(data)]
 
 

@@ -28,18 +28,17 @@ def get_num(fp: BinaryIO, number_offset: int) -> int:
     """
     if number_offset == 0:
         return 0
-    fp.seek(number_offset)
-    return read_int32(fp)
+    return read_int32(fp, number_offset)
 
 
-def read_int32(fp: BinaryIO) -> int:
+def read_int32(fp: BinaryIO, start: int) -> int:
     """
     根据字节流读取4个字节32的数字
     :param fp: 流对象
     :param start: 开始位置
     :return: 解析的数字
     """
-    # fp.seek(start)
+    fp.seek(start)
     return int.from_bytes(fp.read(4), "little")
 
 
