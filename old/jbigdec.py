@@ -20,40 +20,50 @@ import struct
 import platform
 
 arch = platform.architecture()
-if (arch[1] == 'WindowsPE'):
-    if (arch[0] == '64bit'):
+if arch[1] == "WindowsPE":
+    if arch[0] == "64bit":
         libjbigdec = cdll.LoadLibrary("./lib/bin/libjbigdec-w64.dll")
     else:
         libjbigdec = cdll.LoadLibrary("./lib/bin/libjbigdec-w32.dll")
 else:
     libjbigdec = cdll.LoadLibrary("./libjbigdec.so")
 
-#SaveJbigAsBmp = libjbigdec.SaveJbigAsBmp
-#SaveJbigAsBmp.restype = None
-#SaveJbigAsBmp.argtypes = [c_void_p, c_int, c_char_p]
+# SaveJbigAsBmp = libjbigdec.SaveJbigAsBmp
+# SaveJbigAsBmp.restype = None
+# SaveJbigAsBmp.argtypes = [c_void_p, c_int, c_char_p]
 
-#SaveJbig2AsBmp = libjbigdec.SaveJbig2AsBmp
-#SaveJbig2AsBmp.restype = None
-#SaveJbig2AsBmp.argtypes = [c_void_p, c_int, c_char_p]
+# SaveJbig2AsBmp = libjbigdec.SaveJbig2AsBmp
+# SaveJbig2AsBmp.restype = None
+# SaveJbig2AsBmp.argtypes = [c_void_p, c_int, c_char_p]
 
 jbigDecode = libjbigdec.jbigDecode
 jbigDecode.restype = None
 jbigDecode.argtypes = [c_void_p, c_int, c_int, c_int, c_int, c_void_p]
 
+
 class CImage:
     def __init__(self, buffer):
         self.buffer = buffer
-        self.buffer_size=len(buffer)
-        (self.width, self.height,
-         self.num_planes, self.bits_per_pixel) = struct.unpack("<IIHH", buffer[4:16])
+        self.buffer_size = len(buffer)
+        (self.width, self.height, self.num_planes, self.bits_per_pixel) = struct.unpack(
+            "<IIHH", buffer[4:16]
+        )
         self.bytes_per_line = ((self.width * self.bits_per_pixel + 31) >> 5) << 2
 
     def DecodeJbig(self):
         out = create_string_buffer(self.height * self.bytes_per_line)
-        jbigDecode(self.buffer[48:], self.buffer_size-48, self.height, self.width, self.bytes_per_line, out)
+        jbigDecode(
+            self.buffer[48:],
+            self.buffer_size - 48,
+            self.height,
+            self.width,
+            self.bytes_per_line,
+            out,
+        )
         return out
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import sys, os
 
     if len(sys.argv) < 3:
@@ -64,7 +74,7 @@ if __name__ == '__main__':
     buffer_size = os.stat(sys.argv[1]).st_size
     buffer = f.read()
 
-    #SaveJbigAsBmp(buffer, buffer_size, sys.argv[2].encode("ascii"))
+    # SaveJbigAsBmp(buffer, buffer_size, sys.argv[2].encode("ascii"))
 
     cimage = CImage(buffer)
     out = cimage.DecodeJbig()
@@ -72,7 +82,7 @@ if __name__ == '__main__':
     # PBM is only padded to 8 rather than 32.
     # If the padding is larger, write padded file.
     width = cimage.width
-    if (cimage.bytes_per_line > ((cimage.width +7) >> 3)):
+    if cimage.bytes_per_line > ((cimage.width + 7) >> 3):
         width = cimage.bytes_per_line << 3
 
     fout = open(sys.argv[2].replace(".bmp", ".pbm"), "wb")

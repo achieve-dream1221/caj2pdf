@@ -18,34 +18,45 @@ import struct
 import platform
 
 arch = platform.architecture()
-if (arch[1] == 'WindowsPE'):
-    if (arch[0] == '64bit'):
+if arch[1] == "WindowsPE":
+    if arch[0] == "64bit":
         libjbig2codec = cdll.LoadLibrary("./lib/bin/libjbig2codec-w64.dll")
     else:
         libjbig2codec = cdll.LoadLibrary("./lib/bin/libjbig2codec-w32.dll")
 else:
     libjbig2codec = cdll.LoadLibrary("./libjbig2codec.so")
 
-decode_jbig2data_c    = libjbig2codec.decode_jbig2data_c
+decode_jbig2data_c = libjbig2codec.decode_jbig2data_c
 
-decode_jbig2data_c.restype   = c_int
-decode_jbig2data_c.argtypes  = [c_void_p, c_int, c_void_p, c_int, c_int, c_int, c_int]
+decode_jbig2data_c.restype = c_int
+decode_jbig2data_c.argtypes = [c_void_p, c_int, c_void_p, c_int, c_int, c_int, c_int]
+
 
 class CImage:
     def __init__(self, buffer):
         self.buffer = buffer
-        self.buffer_size=len(buffer)
-        (self.width, self.height,
-         self.num_planes, self.bits_per_pixel) = struct.unpack("<IIHH", buffer[4:16])
+        self.buffer_size = len(buffer)
+        (self.width, self.height, self.num_planes, self.bits_per_pixel) = struct.unpack(
+            "<IIHH", buffer[4:16]
+        )
         self.bytes_per_line = ((self.width * self.bits_per_pixel + 31) >> 5) << 2
 
     def DecodeJbig2(self):
         out = create_string_buffer(self.height * self.bytes_per_line)
         width_in_bytes = (self.width * self.bits_per_pixel + 7) >> 3
-        decode_jbig2data_c(self.buffer[48:], self.buffer_size-48, out, self.width, self.height, self.bytes_per_line, width_in_bytes)
+        decode_jbig2data_c(
+            self.buffer[48:],
+            self.buffer_size - 48,
+            out,
+            self.width,
+            self.height,
+            self.bytes_per_line,
+            width_in_bytes,
+        )
         return out
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import sys, os
 
     if len(sys.argv) < 3:
@@ -61,7 +72,7 @@ if __name__ == '__main__':
 
     # PBM is only padded to 8 rather than 32.
     # If the padding is larger, write padded file.
-    if (cimage.bytes_per_line > ((cimage.width +7) >> 3)):
+    if cimage.bytes_per_line > ((cimage.width + 7) >> 3):
         cimage.width = cimage.bytes_per_line << 3
 
     with open(sys.argv[2], "wb") as fout:

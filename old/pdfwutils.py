@@ -35,11 +35,12 @@ import sys
 import os
 import zlib
 import argparse
-#from PIL import Image
+# from PIL import Image
 
 # TiffImagePlugin.DEBUG = True
 from datetime import datetime
-#from jp2 import parsejp2
+
+# from jp2 import parsejp2
 from enum import Enum
 from io import BytesIO
 import logging
@@ -787,7 +788,7 @@ class pdfdoc(object):
         image[PdfName.Subtype] = PdfName.Image
         image[PdfName.Filter] = ofilter
         image[PdfName.Width] = imgwidthpx
-        if (imgheightpx < 0):
+        if imgheightpx < 0:
             image[PdfName.Height] = -imgheightpx
         else:
             image[PdfName.Height] = imgheightpx
@@ -897,11 +898,7 @@ class pdfdoc(object):
             self.writer.addobj(content)
             self.writer.addobj(image)
 
-    def add_multi_imagepage(
-        self,
-        coordinates,
-        collected_images
-    ):
+    def add_multi_imagepage(self, coordinates, collected_images):
         (
             color,
             ndpi,
@@ -918,7 +915,7 @@ class pdfdoc(object):
         pagewidth, pageheight, imgwidthpdf, imgheightpdf = default_layout_fun(
             imgwidthpx, imgheightpx, ndpi
         )
-        if (pageheight < 0):
+        if pageheight < 0:
             pageheight = -pageheight
 
         userunit = None
@@ -941,10 +938,10 @@ class pdfdoc(object):
         imgxpdf = (pagewidth - imgwidthpdf) / 2.0
         imgypdf = (pageheight + imgheightpdf) / 2.0
 
-        cropborder=None
-        bleedborder=None
-        trimborder=None
-        artborder=None
+        cropborder = None
+        bleedborder = None
+        trimborder = None
+        artborder = None
 
         if self.with_pdfrw:
             from pdfrw import PdfDict, PdfName, PdfObject, PdfString
@@ -995,7 +992,7 @@ class pdfdoc(object):
         image[PdfName.Subtype] = PdfName.Image
         image[PdfName.Filter] = ofilter
         image[PdfName.Width] = imgwidthpx
-        if (imgheightpx < 0):
+        if imgheightpx < 0:
             image[PdfName.Height] = -imgheightpx
         else:
             image[PdfName.Height] = imgheightpx
@@ -1047,54 +1044,65 @@ class pdfdoc(object):
             if i == 0:
                 # skip main image
                 continue
-            Im_i ={}
+            Im_i = {}
             (
-                Im_i['color'],
-                Im_i['ndpi'],
-                Im_i['imgformat'],
-                Im_i['imgdata'],
-                Im_i['imgwidthpx'],
-                Im_i['imgheightpx'],
-                Im_i['palette'],
-                Im_i['inverted'],
-                Im_i['depth'],
-                Im_i['rotate'],
+                Im_i["color"],
+                Im_i["ndpi"],
+                Im_i["imgformat"],
+                Im_i["imgdata"],
+                Im_i["imgwidthpx"],
+                Im_i["imgheightpx"],
+                Im_i["palette"],
+                Im_i["inverted"],
+                Im_i["depth"],
+                Im_i["rotate"],
             ) = collected_images[i]
-            Im_i['pagewidth'], Im_i['pageheight'], Im_i['imgwidthpdf'], Im_i['imgheightpdf'] = default_layout_fun(
-                Im_i['imgwidthpx'], Im_i['imgheightpx'], Im_i['ndpi']
+            (
+                Im_i["pagewidth"],
+                Im_i["pageheight"],
+                Im_i["imgwidthpdf"],
+                Im_i["imgheightpdf"],
+            ) = default_layout_fun(
+                Im_i["imgwidthpx"], Im_i["imgheightpx"], Im_i["ndpi"]
             )
-            Im_i['imgxpdf'] = (Im_i['pagewidth'] - Im_i['imgwidthpdf']) / 2.0
-            Im_i['imgypdf'] = (Im_i['pageheight'] + Im_i['imgheightpdf']) / 2.0
+            Im_i["imgxpdf"] = (Im_i["pagewidth"] - Im_i["imgwidthpdf"]) / 2.0
+            Im_i["imgypdf"] = (Im_i["pageheight"] + Im_i["imgheightpdf"]) / 2.0
 
             ofilter = PdfName.DCTDecode
 
-            image1 = PdfDict(stream=convert_load(Im_i['imgdata']))
+            image1 = PdfDict(stream=convert_load(Im_i["imgdata"]))
 
             image1[PdfName.Type] = PdfName.XObject
             image1[PdfName.Subtype] = PdfName.Image
             image1[PdfName.Filter] = ofilter
-            image1[PdfName.Width] = Im_i['imgwidthpx']
-            if (Im_i['imgheightpx'] < 0):
-                image1[PdfName.Height] = -Im_i['imgheightpx']
+            image1[PdfName.Width] = Im_i["imgwidthpx"]
+            if Im_i["imgheightpx"] < 0:
+                image1[PdfName.Height] = -Im_i["imgheightpx"]
             else:
-                image1[PdfName.Height] = Im_i['imgheightpx']
-            if Im_i['color'] == Colorspace.L:
+                image1[PdfName.Height] = Im_i["imgheightpx"]
+            if Im_i["color"] == Colorspace.L:
                 image1[PdfName.ColorSpace] = PdfName.DeviceGray
             else:
                 image1[PdfName.ColorSpace] = PdfName.DeviceRGB
-            image1[PdfName.BitsPerComponent] = Im_i['depth']
+            image1[PdfName.BitsPerComponent] = Im_i["depth"]
 
             offset_x = coordinates[i][0] / 300 * 72 / 2.473
             offset_y = coordinates[i][1] / 300 * 72 / 2.473
 
-            if (Im_i['imgheightpx'] < 0):
-                offset_y -= Im_i['imgheightpdf']
+            if Im_i["imgheightpx"] < 0:
+                offset_y -= Im_i["imgheightpdf"]
 
             text += (
                 "\nq\n%0.4f 0 0 %0.4f %0.4f %0.4f cm\n/Im%d Do\nQ"
-                % (Im_i['imgwidthpdf'], -Im_i['imgheightpdf'], offset_x, imgypdf - offset_y, i)
+                % (
+                    Im_i["imgwidthpdf"],
+                    -Im_i["imgheightpdf"],
+                    offset_x,
+                    imgypdf - offset_y,
+                    i,
+                )
             ).encode("ascii")
-            image_dict[b'/Im%d' % i]=image1
+            image_dict[b"/Im%d" % i] = image1
             secondary_images.append(image1)
 
         content = PdfDict(stream=convert_load(text))
@@ -1202,20 +1210,20 @@ class pdfdoc(object):
 
         if self.fullscreen:
             # this setting might be overwritten later by the page mode
-            catalog[PdfName.ViewerPreferences][
-                PdfName.NonFullScreenPageMode
-            ] = PdfName.UseNone
+            catalog[PdfName.ViewerPreferences][PdfName.NonFullScreenPageMode] = (
+                PdfName.UseNone
+            )
 
         if self.panes == PageMode.thumbs:
-            catalog[PdfName.ViewerPreferences][
-                PdfName.NonFullScreenPageMode
-            ] = PdfName.UseThumbs
+            catalog[PdfName.ViewerPreferences][PdfName.NonFullScreenPageMode] = (
+                PdfName.UseThumbs
+            )
             # this setting might be overwritten later if fullscreen
             catalog[PdfName.PageMode] = PdfName.UseThumbs
         elif self.panes == PageMode.outlines:
-            catalog[PdfName.ViewerPreferences][
-                PdfName.NonFullScreenPageMode
-            ] = PdfName.UseOutlines
+            catalog[PdfName.ViewerPreferences][PdfName.NonFullScreenPageMode] = (
+                PdfName.UseOutlines
+            )
             # this setting might be overwritten later if fullscreen
             catalog[PdfName.PageMode] = PdfName.UseOutlines
         elif self.panes in [PageMode.none, None]:
@@ -1424,7 +1432,7 @@ def ccitt_payload_location_from_pil(img):
     # Read the TIFF tags to find the offset(s) of the compressed data strips.
     strip_offsets = img.tag_v2[TiffImagePlugin.STRIPOFFSETS]
     strip_bytes = img.tag_v2[TiffImagePlugin.STRIPBYTECOUNTS]
-    rows_per_strip = img.tag_v2.get(TiffImagePlugin.ROWSPERSTRIP, 2 ** 32 - 1)
+    rows_per_strip = img.tag_v2.get(TiffImagePlugin.ROWSPERSTRIP, 2**32 - 1)
 
     # PIL always seems to create a single strip even for very large TIFFs when
     # it saves images, so assume we only have to read a single strip.
@@ -1473,7 +1481,7 @@ def parse_png(rawdata):
     i = 16
     while i < len(rawdata):
         # once we can require Python >= 3.2 we can use int.from_bytes() instead
-        n, = struct.unpack(">I", rawdata[i - 8 : i - 4])
+        (n,) = struct.unpack(">I", rawdata[i - 8 : i - 4])
         if i + n > len(rawdata):
             raise Exception("invalid png: %d %d %d" % (i, n, len(rawdata)))
         if rawdata[i - 4 : i] == b"IDAT":
@@ -1491,7 +1499,7 @@ def parse_png(rawdata):
             for j in range(i, i + n, 3):
                 # with int.from_bytes() we would not have to prepend extra
                 # zeroes
-                color, = struct.unpack(">I", b"\x00" + rawdata[j : j + 3])
+                (color,) = struct.unpack(">I", b"\x00" + rawdata[j : j + 3])
                 palette.append(color)
         i += n
         i += 12
@@ -1506,7 +1514,7 @@ def read_images(rawdata, colorspace, first_frame_only=False):
         imgdata = Image.open(im)
     except IOError as e:
         # test if it is a jpeg2000 image
-        if rawdata[:12] != b"\x00\x00\x00\x0C\x6A\x50\x20\x20\x0D\x0A\x87\x0A":
+        if rawdata[:12] != b"\x00\x00\x00\x0c\x6a\x50\x20\x20\x0d\x0a\x87\x0a":
             raise ImageOpenError(
                 "cannot read input image (not jpeg2000). "
                 "PIL: error reading image: %s" % e
@@ -1691,7 +1699,7 @@ def read_images(rawdata, colorspace, first_frame_only=False):
 
         newimg = None
         if color == Colorspace["1"]:
-            if (rawdata[0:2] == b"P4"):
+            if rawdata[0:2] == b"P4":
                 zdata = zlib.compress(rawdata[13:])
             else:
                 zdata = zlib.compress(rawdata)
@@ -1703,7 +1711,7 @@ def read_images(rawdata, colorspace, first_frame_only=False):
                     zdata,
                     imgwidthpx,
                     imgheightpx,
-                    [0xffffff, 0],
+                    [0xFFFFFF, 0],
                     False,
                     1,
                     rotation,
@@ -2073,7 +2081,6 @@ def find_scale(pagewidth, pageheight):
 # as a binary string representing the image content or as filenames to the
 # images.
 def convert(*images, **kwargs):
-
     _default_kwargs = dict(
         title=None,
         author=None,
@@ -2226,8 +2233,8 @@ def convert(*images, **kwargs):
 
     return pdf.tostring()
 
-def convert_ImageList(*images, **kwargs):
 
+def convert_ImageList(*images, **kwargs):
     _default_kwargs = dict(
         title=None,
         author=None,
@@ -2291,14 +2298,14 @@ def convert_ImageList(*images, **kwargs):
     if not isinstance(images, (list, tuple)):
         images = [images]
 
-    while (1):
-        if (len(images) == 0):
+    while 1:
+        if len(images) == 0:
             break
         image_item = images.pop(0)
-        if (image_item == None):
+        if image_item == None:
             coordinates = images.pop(0)
-            collected_images = images[:len(coordinates)]
-            del images[:len(coordinates)]
+            collected_images = images[: len(coordinates)]
+            del images[: len(coordinates)]
             pdf.add_multi_imagepage(coordinates, collected_images)
             continue
 
@@ -2318,7 +2325,7 @@ def convert_ImageList(*images, **kwargs):
         pagewidth, pageheight, imgwidthpdf, imgheightpdf = kwargs["layout_fun"](
             imgwidthpx, imgheightpx, ndpi
         )
-        if (pageheight < 0):
+        if pageheight < 0:
             pageheight = -pageheight
 
         userunit = None
@@ -2368,6 +2375,7 @@ def convert_ImageList(*images, **kwargs):
         return
 
     return pdf.tostring()
+
 
 def parse_num(num, name):
     if num == "":
