@@ -11,10 +11,17 @@ from .pdf_parser import pdf_parser
 from .caj_parser import caj_parser
 
 
-def convert(src: str, dest: str = None):
+def convert(src: str, dest: str = None) -> None:
+    """
+    caj文件转pdf
+    :param src: 源文件路径
+    :param dest: 保存路径
+    :return: None
+    """
     src, fmt, offset = preprocess(src)
     if dest is None:
-        dest = src.stem + ".pdf"
+        # 如果没有设置目标存储目录,则在源文件同级目录下创建converted目录
+        dest = src.parent / "converted" / (src.stem + ".pdf")
     dest = Path(dest)
     # 创建父级文件夹,若存在则不创建
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -28,4 +35,4 @@ def convert(src: str, dest: str = None):
         case other:
             logger.error(f"{other} format is not implemented!")
             return
-    logger.debug("convert success!")
+    logger.success("convert success!")

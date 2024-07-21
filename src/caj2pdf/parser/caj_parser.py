@@ -4,41 +4,44 @@
 # @Author  : ACHIEVE_DREAM
 # @File    : caj_parser.py
 # @Software: Pycharm
-import io
-import os
 import re
 import subprocess
 from pathlib import Path
 
+from loguru import logger
+
 from ..utils import CajOffset, to_int32
 
 
-def caj_parser(src: Path, dest: Path, offset: CajOffset):
-    with src.open("rb") as fp:
-        data = fp.read()
-    pdf_start = to_int32(data, to_int32(data, offset.page_num + 4))
-    pdf_end = data.rfind(b"endobj") + 6
-    pdf_data = b"%PDF-1.3\r\n" + data[pdf_start:pdf_end] + b"\r\n"
-    page_num = to_int32(data, offset.page_num) if offset.page_num != 0 else 0
-    end_obj_addr = find_all(pdf_data, b"endobj")
+def caj_parser(src: Path, dest: Path, offset: CajOffset) -> None:
+    logger.debug(f"{src.name} is CAJ format")
+    with src.open("rb") as fp:  # 读取原始caj二进制内容
+        content = fp.read()
+    pdf_start = to_int32(content, to_int32(content, offset.page_num + 4))
+    pdf_end = content.rfind(b"endobj") + 6
+    content = b"%PDF-1.3\r\n" + content[pdf_start:pdf_end] + b"\r\n"
+    page_num = to_int32(content, offset.page_num) if offset.page_num != 0 else 0
+    end_obj_addr = find_all(content, b"endobj")
     obj_no = set()
     for addr in end_obj_addr:
-        start_obj = pdf_data[:addr].rfind(b" 0 obj") + 6
-        start_obj = max(pdf_data[:start_obj].rfind(b"\r") + 1, pdf_data[:start_obj].rfind(b"\n") + 1)
-        end_obj = pdf_data.find(b" ", start_obj)
-        no = int(pdf_data[start_obj:end_obj])
+        start_obj = content[:addr].rfind(b" 0 obj") + 6
+        start_obj = max(
+            content[:start_obj].rfind(b"\r") + 1, content[:start_obj].rfind(b"\n") + 1
+        )
+        end_obj = content.find(b" ", start_obj)
+        no = int(content[start_obj:end_obj])
         obj_no.add(no)
 
     ind_set = set()
-    for addr in find_all(pdf_data, b"/Parent "):
+    for addr in find_all(content, b"/Parent "):
         addr += 8
-        end = pdf_data.find(b" ", addr)
-        ind_set.add(int(pdf_data[addr:end]))
+        end = content.find(b" ", addr)
+        ind_set.add(int(content[addr:end]))
 
     pages_obj_no = set()
     top_pages_obj_no = set()
     for ind in ind_set:
-        if pdf_data.find(bytes(f"\r{ind} 0 obj", 'utf8')) == -1:
+        if content.find(bytes(f"\r{ind} 0 obj", "utf8")) == -1:
             top_pages_obj_no.add(ind)
         else:
             pages_obj_no.add(ind)
@@ -56,9 +59,9 @@ def caj_parser(src: Path, dest: Path, offset: CajOffset):
     else:  # root pages object exists, then find the root pages object #
         found = False
         for pon in pages_obj_no:
-            search_bytes = bytes(f"\r{pon} 0 obj", 'utf8')
-            tmp_addr = pdf_data.find(search_bytes) + len(search_bytes)
-            while (_str := pdf_data[tmp_addr:tmp_addr + 6]) != b"Parent":
+            search_bytes = bytes(f"\r{pon} 0 obj", "utf8")
+            tmp_addr = content.find(search_bytes) + len(search_bytes)
+            while (_str := content[tmp_addr: tmp_addr + 6]) != b"Parent":
                 if _str == b"endobj":
                     root_pages_obj_no = pon
                     found = True
@@ -67,48 +70,48 @@ def caj_parser(src: Path, dest: Path, offset: CajOffset):
             if found:
                 break
     catalog = bytes(
-        f"{catalog_obj_no} 0 obj\r<</Type /Catalog\r/Pages {root_pages_obj_no} 0 R\r>>\rendobj\r", "utf-8")
-    pdf_data += catalog
-    pdf = io.BytesIO(pdf_data)
+        f"{catalog_obj_no} 0 obj\r<</Type /Catalog\r/Pages {root_pages_obj_no} 0 R\r>>\rendobj\r",
+        "utf-8",
+    )
+    content += catalog
     # Add Pages obj and EOF mark if root pages object exist, pass deal with single missing pages object
     # 如果根页面对象存在，则添加页面 obj 和 EOF 标记，传递处理单个缺失页面对象
     if single_pages_obj_missed or multi_pages_obj_missed:
         inds_str = [f"{i} 0 R" for i in top_pages_obj_no]
         kids_str = f"[{" ".join(inds_str)}]"
         pages_str = f"{root_pages_obj_no} 0 obj\r<<\r/Type /Pages\r/Kids {kids_str}\r/Count {page_num}\r>>\rendobj\r"
-        pdf_data += bytes(pages_str, "utf-8")
-        pdf = io.BytesIO(pdf_data)
+        content += bytes(pages_str, "utf-8")
     # 处理多个缺失的 Pages 对象
     if multi_pages_obj_missed:
         kids_dict = {i: set() for i in top_pages_obj_no}
         count_dict = {i: 0 for i in top_pages_obj_no}
         for tpon in top_pages_obj_no:
-            for kid in find_all(pdf_data, bytes(f"/Parent {tpon} 0 R", "utf-8")):
-                ind = pdf_data[:kid].rfind(b" obj")
-                addr = pdf_data[:ind].rfind(b"\r") + 1
-                end_obj = pdf_data.find(b" ", addr)
-                kids_dict[tpon].add(int(pdf_data[addr:end_obj]))
-                tmp_addr = pdf_data.find(b"/", pdf_data.find(b"/Type", addr) + 5) + 1
-                if pdf_data[tmp_addr:tmp_addr + 5] == b"Pages":
-                    cnt_addr = pdf_data.find(b"/Count ", addr) + 7
+            for kid in find_all(content, bytes(f"/Parent {tpon} 0 R", "utf-8")):
+                ind = content[:kid].rfind(b" obj")
+                addr = content[:ind].rfind(b"\r") + 1
+                end_obj = content.find(b" ", addr)
+                kids_dict[tpon].add(int(content[addr:end_obj]))
+                tmp_addr = content.find(b"/", content.find(b"/Type", addr) + 5) + 1
+                if content[tmp_addr: tmp_addr + 5] == b"Pages":
+                    cnt_addr = content.find(b"/Count ", addr) + 7
                     cnt_len = 0
-                    while pdf_data[cnt_addr:cnt_addr + 1] not in [b" ", b"\r", b"/"]:
+                    while content[cnt_addr: cnt_addr + 1] not in [b" ", b"\r", b"/"]:
                         cnt_len += 1
                         cnt_addr += 1
-                    cnt = int(pdf_data[cnt_addr - cnt_len: cnt_addr])
+                    cnt = int(content[cnt_addr - cnt_len: cnt_addr])
                     count_dict[tpon] += cnt
                 else:  # _type == b"Page"
                     count_dict[tpon] += 1
             kids_no_str = [f"{i} 0 R" for i in kids_dict[tpon]]
             kids_str = f"[{" ".join(kids_no_str)}]"
             pages_str = f"{tpon} 0 obj\r<<\r/Type /Pages\r/Kids {kids_str}\r/Count {count_dict[tpon]}\r>>\rendobj\r"
-            pdf_data += bytes(pages_str, "utf-8")
-    pdf_data += bytes("\n%%EOF\r", "utf-8")
+            content += bytes(pages_str, "utf-8")
+    content += bytes("\n%%EOF\r", "utf-8")
     tmp = dest.with_suffix(".tmp")
     with tmp.open("wb") as fp:
-        fp.write(pdf_data)
+        fp.write(content)
     subprocess.run(["pymupdf", "clean", tmp, dest])
-    os.remove(tmp)
+    tmp.unlink(missing_ok=True)
 
 
 def find_all(data: bytes, search_bytes: bytes) -> list[int]:

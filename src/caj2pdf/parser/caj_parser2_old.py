@@ -30,7 +30,7 @@ from ..utils import CajOffset, get_num, read_int32
 
 def caj_parser(src: Path, dest: Path, offset: CajOffset):
     with src.open("rb") as fp:
-        pdf_start = read_int32(fp, read_int32(fp,offset.page_num + 4))
+        pdf_start = read_int32(fp, read_int32(fp, offset.page_num + 4))
         pdf_end = find_all(fp, b"endobj")[-1] + 6
         pdf_length = pdf_end - pdf_start
         fp.seek(pdf_start)
@@ -130,7 +130,9 @@ def caj_parser(src: Path, dest: Path, offset: CajOffset):
             kids_dict = {i: [] for i in top_pages_obj_no}
             count_dict = {i: 0 for i in top_pages_obj_no}
             for tpon in top_pages_obj_no:
-                kids_addr = find_all(pdf, bytes("/Parent {0} 0 R".format(tpon), "utf-8"))
+                kids_addr = find_all(
+                    pdf, bytes("/Parent {0} 0 R".format(tpon), "utf-8")
+                )
                 for kid in kids_addr:
                     ind = fnd_rvrs(pdf, b"obj", kid) - 4
                     addr = fnd_rvrs(pdf, b"\r", ind)

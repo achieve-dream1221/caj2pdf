@@ -13,6 +13,7 @@ from typing import BinaryIO
 @dataclass
 class CajOffset:
     """Caj偏移量"""
+
     page_num: int
     toc_num: int
     toc_end: int
@@ -49,7 +50,7 @@ def to_int32(data: bytes, start: int) -> int:
     :param start: 开始位置
     :return: 解析的数字
     """
-    return int.from_bytes(data[start:start + 4], "little")
+    return int.from_bytes(data[start : start + 4], "little")
 
 
 def preprocess(path: str) -> tuple[Path, str, CajOffset]:
@@ -78,7 +79,12 @@ def preprocess(path: str) -> tuple[Path, str, CajOffset]:
             offset.page_data = offset.toc_end + 20 * get_num(fp, offset.page_num)
         else:
             # 移除空字节, 字符串结束标志, 移除空格, 移除%, 并解码为字符串 KDH CAJ HN %PDF
-            fmt = read4.replace(b"\x00", b"").replace(b"\x20", b"").replace(b"\x25", b"").decode()
+            fmt = (
+                read4.replace(b"\x00", b"")
+                .replace(b"\x20", b"")
+                .replace(b"\x25", b"")
+                .decode()
+            )
             match fmt:
                 case "CAJ":
                     offset.page_num = 0x10
@@ -86,8 +92,12 @@ def preprocess(path: str) -> tuple[Path, str, CajOffset]:
                 case "HN":
                     offset.page_num = 0x90
                     offset.toc_num = 0x158
-                    offset.toc_end = offset.toc_num + 4 + 0x134 * get_num(fp, offset.toc_num)
-                    offset.page_data = offset.toc_end + 20 * get_num(fp, offset.page_num)
+                    offset.toc_end = (
+                        offset.toc_num + 4 + 0x134 * get_num(fp, offset.toc_num)
+                    )
+                    offset.page_data = offset.toc_end + 20 * get_num(
+                        fp, offset.page_num
+                    )
                 case "PDF" | "KDH" | "TEB":
                     pass
                 case _:

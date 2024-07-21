@@ -6,6 +6,7 @@
 # @Software: Pycharm
 # import typer
 from caj2pdf import convert
+from pathlib import Path
 
 # def main(src: str, dest: str = None):
 #     convert(src, dest)
@@ -13,4 +14,5 @@ from caj2pdf import convert
 
 if __name__ == "__main__":
     # typer.run(main)
-    convert("../target/caj/caj.caj")
+    for e in Path("../target/caj").glob("*.caj"):
+        convert(str(e))
