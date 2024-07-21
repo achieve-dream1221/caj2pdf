@@ -18,6 +18,13 @@ from ..utils import to_int32
 # start = time.perf_counter()
 # logger.debug(f"耗时: {time.perf_counter() - start:.5f} s")
 def caj_parser(src: str | Path, dest: str | Path) -> None:
+    """
+    CAJ转PDF
+    https://github.com/caj2pdf/caj2pdf/wiki/CAJ-%E6%A0%BC%E5%BC%8F%E7%9A%84%E9%A1%B5%E9%9D%A2%E5%86%85%E5%AE%B9
+    :param src: 源文件地址
+    :param dest: 目标文件地址
+    :return: None
+    """
     if isinstance(src, str):
         src = Path(src)
     if isinstance(dest, str):
@@ -35,9 +42,7 @@ def caj_parser(src: str | Path, dest: str | Path) -> None:
     obj_numbers = set()
     for addr in find_all(content, b"endobj"):
         start = content.rfind(b" 0 obj", 0, addr) + 6
-        start = (
-            max(content.rfind(b"\r", 0, start), content.rfind(b"\n", 0, start) + 1) + 1
-        )
+        start = max(content.rfind(b"\r", 0, start), content.rfind(b"\n", 0, start)) + 1
         obj_numbers.add(int(content[start : content.find(b" ", start)]))
     ind_set = {
         int(content[i + 8 : content.find(b" ", i + 8)])

@@ -6,6 +6,7 @@
 # @Software: Pycharm
 # import typer
 from caj2pdf import convert
+from old.cajparser import CAJParser
 from pathlib import Path
 
 # def main(src: str, dest: str = None):
@@ -14,5 +15,8 @@ from pathlib import Path
 
 if __name__ == "__main__":
     # typer.run(main)
-    for e in Path("../target/caj").glob("*.caj"):
-        convert(str(e))
+    # for e in Path("../target/caj").glob("*.caj"):
+    #     convert(str(e))
+    convert(r"E:\pycharm\caj2pdf\target\caj\caj2.caj")
+    # p = CAJParser(r"E:\pycharm\caj2pdf\target\caj\caj2.caj")
+    # p.convert(r"E:\pycharm\caj2pdf\target\caj\caj2.pdf")

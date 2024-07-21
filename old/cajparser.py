@@ -2,7 +2,7 @@ import os
 import struct
 from shutil import copy
 from subprocess import check_output, STDOUT, CalledProcessError
-from utils import (
+from .utils import (
     fnd,
     fnd_all,
     add_outlines,
