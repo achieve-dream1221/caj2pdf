@@ -22,7 +22,7 @@ managed = true
 dev-dependencies = []
 
 [tool.rye.scripts]
-convert = "python old/caj2pdf.py convert target/caj/hn.caj"
+convert = "python old/caj2pdf.py convert target/caj/caj.caj"
 show = "python old/caj2pdf.py show target/caj/hn"
 main = "python examples/main.py target/caj/caj.caj"
 

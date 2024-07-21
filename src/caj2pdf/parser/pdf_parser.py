@@ -9,6 +9,14 @@ from pathlib import Path
 from loguru import logger
 
 
-def pdf_parser(src: Path, dest: Path) -> None:
-    logger.debug(f"{src.name} is %PDF format")
+def pdf_parser(src: str | Path, dest: str | Path) -> None:
+    """
+    pdf转换
+    :param src: 源路径
+    :param dest: 目标路径
+    :return: None
+    """
+    if isinstance(src, str):
+        src = Path(src)
+    logger.debug(f"{src.name} is %PDF format!")
     shutil.copy(src, dest)
